@@ -1,0 +1,19 @@
+Source: terminator-hostwatch
+Section: misc
+Priority: optional
+Maintainer: Philipp Heckel <philipp.heckel@gmail.com>
+Build-Depends: debhelper (>= 8.0.0)
+Standards-Version: 3.9.4
+Homepage: https://github.com/binwiederhier/TerminatorHostWatch
+Vcs-Git: git://git@github.com:binwiederhier/TerminatorHostWatch.git
+Vcs-Browser: https://github.com/binwiederhier/TerminatorHostWatch
+
+Package: terminator-hostwatch
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, terminator
+Description: Terminator HostWatch Plugin
+ This plugin monitors the last line (PS1) of each terminator terminal, and 
+ applies a host-specific profile if the hostname is changed.
+ .
+ As of now, the plugin simply parses the PS1-evaluated last line and matches 
+ it against the regex [^@]+@(\w+) (e.g. to match user@host).
