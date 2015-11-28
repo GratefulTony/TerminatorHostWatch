@@ -1,7 +1,7 @@
 #!/usr/bin/python
 #
 # HostWatch Terminator Plugin
-# Copyright (C) 2015 eGratefulTony & Philipp C. Heckel
+# Copyright (C) 2015 GratefulTony & Philipp C. Heckel
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -22,8 +22,11 @@ NAME
   hostWatch.py - Terminator plugin to apply a host-dependant terminal profile
 
 DESCRIPTION
-  This plugin monitors the last line of each terminator terminal, and applies a 
-  host-specific profile if the hostname is changed.
+  This plugin monitors the last line (PS1) of each terminator terminal, and 
+  applies a host-specific profile if the hostname is changed. 
+
+  As of now, the plugin simply parses the PS1-evaluated last line and matches it
+  against the regex "[^@]+@(\w+)" ((e.g. user@host).
 
 INSTALLATION
   Put this .py in /usr/share/terminator/terminatorlib/plugins/hostWatch.py 
@@ -32,6 +35,16 @@ INSTALLATION
   Then create a profile in Terminator to match your hostname. If you have a
   server that displays 'user@myserver ~ $', for instance, create a profile
   called 'myserver'.  
+
+CONFIGURATION
+  For now, the only setting you can change is the regex patterns the plugin will
+  react on. The default pattern is "[^@]+@(\w+)" (e.g. user@host). To change
+  that, add this to your .config/terminator/config file and adjust the regexes
+  accordingly:
+
+  [plugins]
+    [[HostWatch]]
+       patterns = "[^@]+@(\w+):([^#]+)#", "[^@]+@(\w+) .+ \$"
 
 DEVELOPMENT
   Development resources for the Python Terminator class and the 'libvte' Python 
@@ -53,8 +66,8 @@ DEBUGGING
 
   That should give you output like this:
 
-     HostWatch::check_host: switching to profile mypc
-     HostWatch::check_host: switching to profile myserver
+     HostWatch::check_host: switching to profile EMEA0014, because line 'pheckel@EMEA0014 ~ $ ' matches pattern '[^@]+@(\w+)'
+     HostWatch::check_host: switching to profile kartoffel, because line 'root@kartoffel:~# ' matches pattern '[^@]+@(\w+)'
      ...
 
 AUTHORS
@@ -67,6 +80,7 @@ import terminatorlib.plugin as plugin
 
 from terminatorlib.util import err, dbg
 from terminatorlib.terminator import Terminator
+from terminatorlib.config import Config
 
 try:
     import pynotify
@@ -80,13 +94,12 @@ except ImportError:
 class HostWatch(plugin.Plugin):
     watches = {}
     profiles = {}
-    hostmatch = re.compile(r"[^@]+@(\w+)")
     
     def __init__(self):
         self.watches = {}
         self.profiles = Terminator().config.list_profiles()
         self.update_watches()
-        
+              
     def update_watches(self):
         for terminal in Terminator().terminals:
             if terminal not in self.watches:
@@ -100,15 +113,15 @@ class HostWatch(plugin.Plugin):
         last_line = self.get_last_line(terminal)
 
         if last_line:
-            match = self.hostmatch.match(last_line)
-            if match:
-                hostname = match.group(1)
-                if hostname in self.profiles:
-                    if hostname != terminal.get_profile():
-                        dbg("switching to profile " + hostname)
+            patterns = self.get_patterns()
+            for pattern in patterns:
+                match = re.match(pattern, last_line)
+                if match:
+                    hostname = match.group(1)
+                    if hostname in self.profiles and hostname != terminal.get_profile():
+                        dbg("switching to profile " + hostname + ", because line '" + last_line + "' matches pattern '" + pattern + "'")
                         terminal.set_profile(None, hostname, False)
-                else:
-                    dbg("no profile " + hostname + "; you must create a profile manually first.")
+                        break
                     
         return True
 
@@ -134,3 +147,13 @@ class HostWatch(plugin.Plugin):
         else:
             return None
 
+    def get_patterns(self):
+        config = Config().plugin_get_config(self.__class__.__name__)
+
+        if config and 'patterns' in config:
+            if isinstance(config['patterns'], list):
+               return config['patterns']
+            else:
+               return [config['patterns']]
+        else: 
+            return [r"[^@]+@(\w+)"]
