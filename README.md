@@ -21,11 +21,11 @@ Development resources for the Python Terminator class and the 'libvte' Python bi
 
 For terminal.* methods, see: 
   - http://bazaar.launchpad.net/~gnome-terminator/terminator/trunk/view/head:/terminatorlib/terminal.py
-  - and: apt-get install libvte-dev; less /usr/include/vte-0.0/vte/vte.h
+  - and: `apt-get install libvte-dev; less /usr/include/vte-0.0/vte/vte.h`
 
 For terminal.get_vte().* methods, see:
   - https://github.com/linuxdeepin/python-vte/blob/master/python/vte.defs
-  - and: apt-get install libvte-dev; less /usr/share/pygtk/2.0/defs/vte.defs
+  - and: `apt-get install libvte-dev; less /usr/share/pygtk/2.0/defs/vte.defs`
 
 ## Debugging
 To debug the plugin, start Terminator from another terminal emulator 
@@ -48,4 +48,4 @@ The plugin was developed by GratefulTony (https://github.com/GratefulTony/Termin
 and extended by Philipp C. Heckel (https://github.com/binwiederhier/TerminatorHostWatch).
 
 ## License
-The plugin is licensed to GPLv2 only.
+The plugin is licensed as GPLv2 only.
