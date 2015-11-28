@@ -4,7 +4,7 @@ all:
 clean:
 	rm -rf build
 
-deb: 
+deb: clean
 	mkdir -p build/debian 2> /dev/null || true
 	cp -a README.md build/debian/
 	cp -a files build/debian/files
