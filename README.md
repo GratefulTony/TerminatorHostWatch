@@ -6,7 +6,7 @@ As of now, the plugin simply parses the PS1-evaluated last line and matches it a
 ## Installation
 Put the `hostWatch.py` in `/usr/share/terminator/terminatorlib/plugins/` or `~/.config/terminator/plugins/`. Then create a profile in Terminator to match your hostname. If you have a server that displays `user@myserver ~ $`, for instance, create a profile called `myserver`.
 
-![Profiles](assets/terminator-profiles.png) ![Split windows](assets/terminator-split-windows.png)
+![Profiles](assets/terminator-hostwatch.png)
 
 ## Configuration
 For now, the only setting you can change is the regex patterns the plugin will react on. The default pattern is `[^@]+@(\w+)` (e.g. `user@host`). To change that, add this to your .config/terminator/config file and adjust the regexes accordingly:
@@ -21,11 +21,11 @@ Development resources for the Python Terminator class and the 'libvte' Python bi
 
 For terminal.* methods, see: 
   - http://bazaar.launchpad.net/~gnome-terminator/terminator/trunk/view/head:/terminatorlib/terminal.py
-  - and: apt-get install libvte-dev; less /usr/include/vte-0.0/vte/vte.h
+  - and: `apt-get install libvte-dev; less /usr/include/vte-0.0/vte/vte.h`
 
 For terminal.get_vte().* methods, see:
   - https://github.com/linuxdeepin/python-vte/blob/master/python/vte.defs
-  - and: apt-get install libvte-dev; less /usr/share/pygtk/2.0/defs/vte.defs
+  - and: `apt-get install libvte-dev; less /usr/share/pygtk/2.0/defs/vte.defs`
 
 ## Debugging
 To debug the plugin, start Terminator from another terminal emulator 
@@ -48,4 +48,4 @@ The plugin was developed by GratefulTony (https://github.com/GratefulTony/Termin
 and extended by Philipp C. Heckel (https://github.com/binwiederhier/TerminatorHostWatch).
 
 ## License
-The plugin is licensed to GPLv2 only.
+The plugin is licensed as GPLv2 only.
