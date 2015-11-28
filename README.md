@@ -18,7 +18,7 @@ sudo apt-get update
 sudo apt-get install terminator-hostwatch
 ```
 
-**Other Linux systems:**
+**Other Linux systems:**   
 Put the `host_watch.py` in `/usr/share/terminator/terminatorlib/plugins/` or `~/.config/terminator/plugins/`. Then create a profile in Terminator to match your hostname. If you have a server that displays `user@myserver ~ $`, for instance, create a profile called `myserver`.
 
 ## Configuration
