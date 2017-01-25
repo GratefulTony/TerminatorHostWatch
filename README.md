@@ -1,7 +1,34 @@
 # Terminator HostWatch Plugin
 This plugin monitors the last line (PS1) of each terminator terminal, and applies a host-specific profile if the hostname is changed. 
 
-As of now, the plugin simply parses the PS1-evaluated last line and matches it against the regex `[^@]+@(\w+)` (e.g. to match `user@host`).
+The plugin simply parses the PS1-evaluated last line and matches it against the regex `[^@]+@(\w+)` (e.g. to match `user@host`).
+
+If last line too short (PS1 may be two-lines text, with prompt on last line), the plugin searches for regex in the line above the prompt.
+Eg. :
+```
+[user@host /a/very/long/path] /dev/pts/42
+$ 
+```
+
+Profiles are either :
+  - plain hostname
+  - a regexp
+
+The plugin searches for hostname exact profile matching or hostname matching profile regexp.
+
+Eg. :
+```
+[profiles]
+  # matches hostname like ns123456
+  [[ns[0-9]+]]
+    ...
+  # matches hostname like ip-172-16-1-2
+  [[ip+]]
+    ...
+  # matches hostname like prd-server-1
+  [[prd-*]]
+    ...
+```
 
 ![Profiles](assets/terminator-hostwatch.png)
 

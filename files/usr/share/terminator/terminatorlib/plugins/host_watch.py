@@ -27,6 +27,15 @@ DESCRIPTION
 
   As of now, the plugin simply parses the PS1-evaluated last line and matches it
   against the regex "[^@]+@(\w+)" ((e.g. user@host).
+  PS1 might be in two-lines. In case the last line is less than 4 chars long, we
+  search for PS1 line one line above the prompt.
+  E.g. :
+  [user@host very/long/path] /dev/pts/42
+  $ 
+
+  Profile name is a plain name (the hostname), or a regexp.
+  The plugin checks for exact match between hostname and profile, or profile
+  pattern and hostname.
 
 INSTALLATION
   Put this .py in /usr/share/terminator/terminatorlib/plugins/hostWatch.py 
@@ -35,6 +44,8 @@ INSTALLATION
   Then create a profile in Terminator to match your hostname. If you have a
   server that displays 'user@myserver ~ $', for instance, create a profile
   called 'myserver'.  
+  Profiles names/regexp are evaluated in a non-predictable order, so be careful
+  with your regexp and be as specific and restrictive as possible.
 
 CONFIGURATION
   For now, the only setting you can change is the regex patterns the plugin will
@@ -94,6 +105,7 @@ except ImportError:
 class HostWatch(plugin.Plugin):
     watches = {}
     profiles = {}
+    capabilities = ['host_watch']
     
     def __init__(self):
         self.watches = {}
@@ -118,10 +130,25 @@ class HostWatch(plugin.Plugin):
                 match = re.match(pattern, last_line)
                 if match:
                     hostname = match.group(1)
-                    if hostname in self.profiles and hostname != terminal.get_profile():
-                        dbg("switching to profile " + hostname + ", because line '" + last_line + "' matches pattern '" + pattern + "'")
-                        terminal.set_profile(None, hostname, False)
-                        break
+                    dbg("match search pattern : %s (%s) ->%s"%( pattern,last_line,hostname))
+                    for profile in self.profiles:
+                        # we create a pattern based on profile name
+                        ppat=re.compile(profile)
+	                if hostname == profile or ppat.match(hostname) and hostname != terminal.get_profile():
+                            """ debug stuff
+                            m2=ppat.match(hostname)
+                            if m2:
+                                dbg("match profile pattern %r : groups :%r"%(m2.group(),m2.groups()))
+                            """
+
+                            dbg("switching to profile " + profile + ", because line '" + last_line + "' matches pattern '" + pattern + "' and profile pattern '"+profile+"'")
+                    	    terminal.set_profile(None, profile, False)
+                            # break on first profile match
+                    	    break
+                    else:
+                    	    continue
+                # break on first pattern match
+                break
                     
         return True
 
@@ -133,6 +160,10 @@ class HostWatch(plugin.Plugin):
         cursor = vte.get_cursor_position()
         column_count = vte.get_column_count()
         row_position = cursor[1]
+        # in case cursor is in two lines, check for length of current line, and get previous line
+        if cursor[0]<=3:
+               dbg("had to search prompt one line above cursor position : %s"%(str(cursor)))
+               row_position = cursor[1]-1 
 
         start_row = row_position
         start_col = 0
