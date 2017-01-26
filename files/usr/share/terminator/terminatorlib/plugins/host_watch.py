@@ -106,11 +106,17 @@ class HostWatch(plugin.Plugin):
     watches = {}
     profiles = {}
     capabilities = ['host_watch']
+    patterns=[]
+    prompt_minlen=0
+    ps_minlen=10
     
     def __init__(self):
         self.watches = {}
         self.profiles = Terminator().config.list_profiles()
         self.update_watches()
+        self.patterns = self.get_patterns()
+        self.prompt_minlen=int(self.get_prompt_minlen())
+        self.ps_minlen=int(self.get_ps_minlen())
               
     def update_watches(self):
         for terminal in Terminator().terminals:
@@ -119,14 +125,13 @@ class HostWatch(plugin.Plugin):
 
     def check_host(self, _vte, terminal):
         """Our host might have changed..."""
-
         self.update_watches()
 
         last_line = self.get_last_line(terminal)
 
         if last_line:
-            patterns = self.get_patterns()
-            for pattern in patterns:
+            sel_profile='default'
+            for pattern in self.patterns:
                 match = re.match(pattern, last_line)
                 if match:
                     hostname = match.group(1)
@@ -142,26 +147,27 @@ class HostWatch(plugin.Plugin):
                             """
 
                             dbg("switching to profile " + profile + ", because line '" + last_line + "' matches pattern '" + pattern + "' and profile pattern '"+profile+"'")
-                    	    terminal.set_profile(None, profile, False)
+                            sel_profile=profile
                             # break on first profile match
                     	    break
-                    else:
-                    	    continue
-                # break on first pattern match
-                break
+ 
+                    # break on first pattern match
+                    dbg("setting profile "+sel_profile)
+                    terminal.set_profile(None, sel_profile, False)
+                    break
                     
         return True
 
     def get_last_line(self, terminal):
         """Retrieve last line of terminal (contains 'user@hostname')"""
-
+        ret=None
         vte = terminal.get_vte()
 
         cursor = vte.get_cursor_position()
         column_count = vte.get_column_count()
         row_position = cursor[1]
         # in case cursor is in two lines, check for length of current line, and get previous line
-        if cursor[0]<=3:
+        if cursor[0]<=self.prompt_minlen:
                dbg("had to search prompt one line above cursor position : %s"%(str(cursor)))
                row_position = cursor[1]-1 
 
@@ -174,9 +180,12 @@ class HostWatch(plugin.Plugin):
         lines = vte.get_text_range(start_row, start_col, end_row, end_col, is_interesting_char).splitlines()
 
         if lines and lines[0]:
-            return lines[0]
-        else:
-            return None
+            if len(lines[0])>=self.ps_minlen:
+                ret=lines[0]
+            else:
+                dbg("line '"+lines[0]+"' too short : "+str(len(lines[0])))
+        
+        return ret
 
     def get_patterns(self):
         config = Config().plugin_get_config(self.__class__.__name__)
@@ -188,3 +197,23 @@ class HostWatch(plugin.Plugin):
                return [config['patterns']]
         else: 
             return [r"[^@]+@(\w+)"]
+        
+    def get_prompt_minlen(self):
+        """ minimal prompt length, below this value, we search for PS1 on previous line """
+        dbg("get patterns")
+        config = Config().plugin_get_config(self.__class__.__name__)
+
+        if config and 'prompt_minlen' in config:
+            return config['prompt_minlen']
+        else: 
+            return 3
+
+    def get_ps_minlen(self):
+        """ minimal PS1 length, below this value, last_line returns None """
+        dbg("get patterns")
+        config = Config().plugin_get_config(self.__class__.__name__)
+
+        if config and 'ps_minlen' in config:
+            return config['ps_minlen']
+        else: 
+            return 10
