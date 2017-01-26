@@ -25,13 +25,37 @@ DESCRIPTION
   This plugin monitors the last line (PS1) of each terminator terminal, and 
   applies a host-specific profile if the hostname is changed. 
 
-  As of now, the plugin simply parses the PS1-evaluated last line and matches it
-  against the regex "[^@]+@(\w+)" ((e.g. user@host).
-  PS1 might be in two-lines. In case the last line is less than 4 chars long, we
-  search for PS1 line one line above the prompt.
+  The plugin simply parses the PS1-evaluated last line and matches it against 
+  a regex "[^@]+@(\w+)" ((e.g. user@host) to find hostname.
+  Once an hostname is found, the plugin tries to match it against the profiles.
+  Profiles might be :
+  - plain hostnames
+  - or regex
+
+PROMPT WRAPPING
+ 
+  PS1 might be displayed in more than one line, for instance if :
+  - very long path, wrapping over several lines
+  - terminal window too small
+  - PS1 set up for 2 lines
+  
   E.g. :
+  geeky and informational PS1 :
   [user@host very/long/path] /dev/pts/42
   $ 
+  
+  unusually long PS1 due to full path display :
+  [user@host a/very/very/long/and/annoying/psychopathic/library/of/whatever/appl
+  lication/path/that/wraps]$ 
+ 
+  We search the first line of PS1 by searching back for last LF character in
+  terminal history from current cursor position. The line following that LF is 
+  the PS1 first line, expected to contain 'user@host' pattern.
+  
+  To avoid unecessary treatment, a minimal prompt length might be set, mandatory
+  if two-lines PS1 is used.
+  A minimal line length is also set up, to avoid unecessary pattern search for
+  short lines, or lines being typed and not complete.
 
   Profile name is a plain name (the hostname), or a regexp.
   The plugin checks for exact match between hostname and profile, or profile
@@ -44,19 +68,33 @@ INSTALLATION
   Then create a profile in Terminator to match your hostname. If you have a
   server that displays 'user@myserver ~ $', for instance, create a profile
   called 'myserver'.  
+  
   Profiles names/regexp are evaluated in a non-predictable order, so be careful
   with your regexp and be as specific and restrictive as possible.
 
 CONFIGURATION
-  For now, the only setting you can change is the regex patterns the plugin will
-  react on. The default pattern is "[^@]+@(\w+)" (e.g. user@host). To change
+  The settings you can change are the regex patterns the plugin will
+  react on, minimum PS1 and prompt lenght, and default profile.
+  
+  The default pattern is "[^@]+@(\w+)" (e.g. user@host). To change
   that, add this to your .config/terminator/config file and adjust the regexes
   accordingly:
 
   [plugins]
     [[HostWatch]]
        patterns = "[^@]+@(\w+):([^#]+)#", "[^@]+@(\w+) .+ \$"
-
+       
+  - minimal prompt length : triggers backward search (see wrapping above)
+    Adapt this to your usual prompt length. If PS1 is a two lines prompt (see
+    above), might be 2 chars (prompt char+space).
+    key : prompt_minlen (default value : 3)
+  - minimal line length : minimal length of line for pattern search when PS1
+    candidate line has been found.
+    Adapt this to your usual PS1 length.
+    key : line_minlen (default value : 10)
+  - failback profile : profile if no matching pattern/profile found
+    key : failback_profile (default : 'default')
+   
 DEVELOPMENT
   Development resources for the Python Terminator class and the 'libvte' Python 
   bindings can be found here:
@@ -108,16 +146,19 @@ class HostWatch(plugin.Plugin):
     capabilities = ['host_watch']
     patterns=[]
     prompt_minlen=0
-    ps_minlen=10
+    line_minlen=10
+    failback_profile='default'
     
     def __init__(self):
         self.watches = {}
         self.profiles = Terminator().config.list_profiles()
-        self.update_watches()
         self.patterns = self.get_patterns()
         self.prompt_minlen=int(self.get_prompt_minlen())
-        self.ps_minlen=int(self.get_ps_minlen())
-              
+        self.line_minlen=int(self.get_line_minlen())
+        self.failback_profile=self.get_failback()
+        self.update_watches()
+        self.last_profile=self.failback_profile
+             
     def update_watches(self):
         for terminal in Terminator().terminals:
             if terminal not in self.watches:
@@ -126,11 +167,10 @@ class HostWatch(plugin.Plugin):
     def check_host(self, _vte, terminal):
         """Our host might have changed..."""
         self.update_watches()
-
         last_line = self.get_last_line(terminal)
 
         if last_line:
-            sel_profile='default'
+            sel_profile=self.failback_profile
             for pattern in self.patterns:
                 match = re.match(pattern, last_line)
                 if match:
@@ -146,14 +186,17 @@ class HostWatch(plugin.Plugin):
                                 dbg("match profile pattern %r : groups :%r"%(m2.group(),m2.groups()))
                             """
 
-                            dbg("switching to profile " + profile + ", because line '" + last_line + "' matches pattern '" + pattern + "' and profile pattern '"+profile+"'")
+                            dbg("matching profile " + profile + " found : line '" + last_line + "' matches pattern '" + pattern + "' and profile pattern '"+profile+"'")
                             sel_profile=profile
                             # break on first profile match
                     	    break
  
+                    # avoid re-applying profile if no change
+                    if sel_profile != self.last_profile:
+                        dbg("setting profile "+sel_profile)
+                        terminal.set_profile(None, sel_profile, False)
+                        self.last_profile=sel_profile
                     # break on first pattern match
-                    dbg("setting profile "+sel_profile)
-                    terminal.set_profile(None, sel_profile, False)
                     break
                     
         return True
@@ -166,24 +209,55 @@ class HostWatch(plugin.Plugin):
         cursor = vte.get_cursor_position()
         column_count = vte.get_column_count()
         row_position = cursor[1]
-        # in case cursor is in two lines, check for length of current line, and get previous line
-        if cursor[0]<=self.prompt_minlen:
-               dbg("had to search prompt one line above cursor position : %s"%(str(cursor)))
-               row_position = cursor[1]-1 
-
+        
         start_row = row_position
         start_col = 0
         end_row = row_position
         end_col = column_count
         is_interesting_char = lambda a, b, c, d: True
 
-        lines = vte.get_text_range(start_row, start_col, end_row, end_col, is_interesting_char).splitlines()
+        """ manage text wrapping :
+        usecases :
+        - PS1 too long
+        - componant of PS1 forcing display on several lines (e.g working directory)
+        - window resizing
+        - ...
+        So, very ugly algorithm
+        if current line too short, we assume prompt is wrapped
+        we the search for 1st line of prompt, that is : first line following the
+        last line containing LF
+        we iterate back until LF found (means : end of output of last command), 
+        then forward one line
+        """
+        lines= vte.get_text_range(start_row, start_col, end_row, end_col, is_interesting_char)
 
         if lines and lines[0]:
-            if len(lines[0])>=self.ps_minlen:
+            # line too short, iterate back
+            if len(lines)<=self.prompt_minlen:
+                dbg("line below prompt min size of "+str(self.prompt_minlen)+ " chars : must iterate back '"+lines+"'")
+                start_row=start_row-1
+                end_row=start_row
+                lines = vte.get_text_range(start_row, start_col, end_row, end_col, is_interesting_char)
+                prev_lines=lines
+                # we iterate back to first line of terminal, including history...
+                while lines != None and start_row>=0:
+                    # LF found, PS1 first line is next line... eeeer previous pushed line
+                    if lines[len(lines)-1] == '\n':
+                        lines=prev_lines
+                        break
+                    
+                    lines = vte.get_text_range(start_row, start_col, end_row, end_col, is_interesting_char)
+                    start_row=start_row-1
+                    end_row=start_row                        
+                    prev_lines=lines
+                    
+        lines=lines.splitlines()
+        if lines and lines[0]:
+            if len(lines[0])>=self.line_minlen:
                 ret=lines[0]
             else:
-                dbg("line '"+lines[0]+"' too short : "+str(len(lines[0])))
+                # should never happen since we browse back in history
+                dbg("line '"+lines[0]+"' too short, won't use : "+str(len(lines[0])))
         
         return ret
 
@@ -200,7 +274,6 @@ class HostWatch(plugin.Plugin):
         
     def get_prompt_minlen(self):
         """ minimal prompt length, below this value, we search for PS1 on previous line """
-        dbg("get patterns")
         config = Config().plugin_get_config(self.__class__.__name__)
 
         if config and 'prompt_minlen' in config:
@@ -208,12 +281,20 @@ class HostWatch(plugin.Plugin):
         else: 
             return 3
 
-    def get_ps_minlen(self):
+    def get_line_minlen(self):
         """ minimal PS1 length, below this value, last_line returns None """
-        dbg("get patterns")
         config = Config().plugin_get_config(self.__class__.__name__)
 
-        if config and 'ps_minlen' in config:
-            return config['ps_minlen']
+        if config and 'line_minlen' in config:
+            return config['line_minlen']
         else: 
             return 10
+        
+    def get_failback(self):
+        """ failback profile, applies if profile not found. """
+        config = Config().plugin_get_config(self.__class__.__name__)
+
+        if config and 'failback_profile' in config:
+            return config['failback_profile']
+        else: 
+            return 'default'
