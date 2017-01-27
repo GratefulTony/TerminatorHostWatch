@@ -8,9 +8,11 @@ The plugin simply parses the PS1-evaluated last line and matches it against a re
 
 ### Profile matching
 Once an hostname is found, the plugin tries to match it against the profiles.
+
 Profiles might be :
  - plain hostnames
  - or regex
+
 The configuration allow to create matching rules for hostname pattern against profile.
 
 ### Prompt wrapping
@@ -56,6 +58,7 @@ sudo apt-get install terminator-hostwatch
 
 **Other Linux systems:**   
 Put the `host_watch.py` in `/usr/share/terminator/terminatorlib/plugins/` or `~/.config/terminator/plugins/`.
+
 Minimal configuration : create a profile in Terminator to match your hostname. If you have a server that displays `user@myserver ~ $`, for instance, create a profile called `myserver`.
 
 ## Configuration
@@ -70,17 +73,24 @@ Plugins section in `.config/terminator/config` :
 The following keys are available :
 
 - prompt patterns : for prompt matching
+
 *key* : patterns
+
 *value* : a regex list. Default if not set : "[^@]+@(\w+)" (e.g. user@host)
+
 Don't forget to create a group in the regex for the `host` field (with `()`), otherwise no hostname can be extracted from regex.
+
 E.g :
 ```
 patterns = "[^@]+@(\w+):([^#]+)#", "[^@]+@(\w+) .+ \$"
 ```
 
 - profile patterns : searches profile against hostname pattern
+
 *key* : profile_patterns
+
 *value* : dict-like list, `pattern:profile`. Default if not set : None
+
 E.g :
 ```
 profile_patterns = "jenkins":"inf","^itg-*":"itg","^ip-10-1-*":"itg","^ns[0-9]+":"ovh","^sd-[0-9]+":"ovh","aramis":"local"
@@ -88,25 +98,36 @@ profile_patterns = "jenkins":"inf","^itg-*":"itg","^ip-10-1-*":"itg","^ns[0-9]+"
 Profiles are searched in order : first by profile patterns, then by profile name, used as patterns also (so be carefull with mixed-up config)
   
 - minimal prompt length : triggers backward search (see wrapping above)
+
 Adapt this to your usual prompt length. If PS1 is a two lines prompt (see above), might be 2 chars (prompt char+space).
+
 *key* : prompt_minlen
+
 *value* : integer. Default if not set : 3
+
 E.g :
 ```
 prompt_minlen = 8
 ```
 - minimal line length : minimal length of line for pattern search when PS1 candidate line has been found.
+
 Adapt this to your usual PS1 length.
+
 *key* : line_minlen
+
 *value* : integer. Default if not set : 10
+
   E.g :
 ```
 line_minlen = 15
 ```
   
 - failback profile : profile if no matching pattern/profile found
+
 *key* : failback_profile
+
 *value* : string. Default if not set : 'default'
+
 E.g :
 ```
 failback_profile = servers
