@@ -25,12 +25,17 @@ DESCRIPTION
   This plugin monitors the last line (PS1) of each terminator terminal, and 
   applies a host-specific profile if the hostname is changed. 
 
+PROMPT MATCHING
   The plugin simply parses the PS1-evaluated last line and matches it against 
   a regex "[^@]+@(\w+)" ((e.g. user@host) to find hostname.
+  
+PROFILE MATCHING
   Once an hostname is found, the plugin tries to match it against the profiles.
   Profiles might be :
   - plain hostnames
   - or regex
+  The configuration allow to create matching rules for hostname pattern against
+  profile.
 
 PROMPT WRAPPING
  
@@ -40,11 +45,11 @@ PROMPT WRAPPING
   - PS1 set up for 2 lines
   
   E.g. :
-  geeky and informational PS1 :
+  - geeky and informational PS1 :
   [user@host very/long/path] /dev/pts/42
   $ 
   
-  unusually long PS1 due to full path display :
+  - unusually long PS1 due to full path display :
   [user@host a/very/very/long/and/annoying/psychopathic/library/of/whatever/appl
   lication/path/that/wraps]$ 
  
@@ -62,6 +67,7 @@ PROMPT WRAPPING
   pattern and hostname.
 
 INSTALLATION
+  
   Put this .py in /usr/share/terminator/terminatorlib/plugins/hostWatch.py 
   or ~/.config/terminator/plugins/hostWatch.py.
 
@@ -73,27 +79,43 @@ INSTALLATION
   with your regexp and be as specific and restrictive as possible.
 
 CONFIGURATION
-  The settings you can change are the regex patterns the plugin will
-  react on, minimum PS1 and prompt lenght, and default profile.
-  
-  The default pattern is "[^@]+@(\w+)" (e.g. user@host). To change
-  that, add this to your .config/terminator/config file and adjust the regexes
-  accordingly:
 
+  Plugin section in .config/terminator/config :
   [plugins]
     [[HostWatch]]
-       patterns = "[^@]+@(\w+):([^#]+)#", "[^@]+@(\w+) .+ \$"
-       
+  
+  Configuration keys :
+  - prompt patterns : for prompt matching
+    key : patterns
+    value : a regex list. Default if not set : "[^@]+@(\w+)" (e.g. user@host)
+    E.g :
+    patterns = "[^@]+@(\w+):([^#]+)#", "[^@]+@(\w+) .+ \$"
+
+  - profile patterns : searches profile against hostname pattern
+    key : profile_patterns
+    value : dict-like list, pattern:profile. Default if not set : None
+    E.g :
+    profile_patterns = "jenkins":"inf","^itg-*":"itg","^ip-10-1-*":"itg",
+    "^ns[0-9]+":"ovh","^sd-[0-9]+":"ovh","aramis":"local"
+    
+    profiles are search in order, by profile patterns, then by profile name
+    (that can also be a pattern, so be carefull with mixed-up config)
+    
   - minimal prompt length : triggers backward search (see wrapping above)
     Adapt this to your usual prompt length. If PS1 is a two lines prompt (see
     above), might be 2 chars (prompt char+space).
-    key : prompt_minlen (default value : 3)
+    key : prompt_minlen
+    value : an int. Default if not set : 3
+    
   - minimal line length : minimal length of line for pattern search when PS1
     candidate line has been found.
     Adapt this to your usual PS1 length.
-    key : line_minlen (default value : 10)
+    key : line_minlen
+    value : an int. Default if not set : 10
+    
   - failback profile : profile if no matching pattern/profile found
-    key : failback_profile (default : 'default')
+    key : failback_profile
+    value : a string. Default if not set : 'default'
    
 DEVELOPMENT
   Development resources for the Python Terminator class and the 'libvte' Python 
@@ -130,6 +152,7 @@ import terminatorlib.plugin as plugin
 from terminatorlib.util import err, dbg
 from terminatorlib.terminator import Terminator
 from terminatorlib.config import Config
+from collections import OrderedDict
 
 try:
     import pynotify
@@ -142,7 +165,8 @@ except ImportError:
 
 class HostWatch(plugin.Plugin):
     watches = {}
-    profiles = {}
+    config={}
+    profile_mappings = OrderedDict()
     capabilities = ['host_watch']
     patterns=[]
     prompt_minlen=0
@@ -150,15 +174,16 @@ class HostWatch(plugin.Plugin):
     failback_profile='default'
     
     def __init__(self):
+        self.config = Config().plugin_get_config(self.__class__.__name__)
         self.watches = {}
-        self.profiles = Terminator().config.list_profiles()
-        self.patterns = self.get_patterns()
         self.prompt_minlen=int(self.get_prompt_minlen())
         self.line_minlen=int(self.get_line_minlen())
         self.failback_profile=self.get_failback()
-        self.update_watches()
         self.last_profile=self.failback_profile
-             
+        self.load_patterns()
+        self.load_profile_mappings()
+        self.update_watches()
+                     
     def update_watches(self):
         for terminal in Terminator().terminals:
             if terminal not in self.watches:
@@ -171,22 +196,18 @@ class HostWatch(plugin.Plugin):
 
         if last_line:
             sel_profile=self.failback_profile
-            for pattern in self.patterns:
-                match = re.match(pattern, last_line)
+            for prompt_pattern in self.patterns:
+                match = prompt_pattern.match(last_line)
                 if match:
                     hostname = match.group(1)
-                    dbg("match search pattern : %s (%s) ->%s"%( pattern,last_line,hostname))
-                    for profile in self.profiles:
+                    dbg("match search pattern : %s (%s) ->%s"%( prompt_pattern.pattern,last_line,hostname))
+                    # since dict is ordered, iterate regexp/mapping, then profiles
+                    for profile_pattern,profile in self.profile_mappings.items():
+                        
                         # we create a pattern based on profile name
-                        ppat=re.compile(profile)
-	                if hostname == profile or ppat.match(hostname) and hostname != terminal.get_profile():
-                            """ debug stuff
-                            m2=ppat.match(hostname)
-                            if m2:
-                                dbg("match profile pattern %r : groups :%r"%(m2.group(),m2.groups()))
-                            """
-
-                            dbg("matching profile " + profile + " found : line '" + last_line + "' matches pattern '" + pattern + "' and profile pattern '"+profile+"'")
+                        #profile_pattern=re.compile(profile)
+	                if hostname == profile or profile_pattern.match(hostname):
+                            dbg("matching profile '" + profile + "' found : line '" + last_line + "' matches prompt pattern '" + prompt_pattern.pattern + "' and profile pattern '"+profile_pattern.pattern+"'")
                             sel_profile=profile
                             # break on first profile match
                     	    break
@@ -261,40 +282,56 @@ class HostWatch(plugin.Plugin):
         
         return ret
 
-    def get_patterns(self):
-        config = Config().plugin_get_config(self.__class__.__name__)
+    def load_patterns(self):
 
-        if config and 'patterns' in config:
-            if isinstance(config['patterns'], list):
-               return config['patterns']
+        if self.config and 'patterns' in self.config:
+            if isinstance(self.config['patterns'], list):
+                for pat in self.config['patterns']:
+                    self.patterns.append(re.compile(pat))
             else:
-               return [config['patterns']]
+                self.patterns.append(re.compile(self.config['patterns']))
         else: 
-            return [r"[^@]+@(\w+)"]
+            self.patterns.append(re.compile(r"[^@]+@(\w+)"))
         
     def get_prompt_minlen(self):
         """ minimal prompt length, below this value, we search for PS1 on previous line """
-        config = Config().plugin_get_config(self.__class__.__name__)
 
-        if config and 'prompt_minlen' in config:
-            return config['prompt_minlen']
+        if self.config and 'prompt_minlen' in self.config:
+            return self.config['prompt_minlen']
         else: 
             return 3
 
     def get_line_minlen(self):
         """ minimal PS1 length, below this value, last_line returns None """
-        config = Config().plugin_get_config(self.__class__.__name__)
 
-        if config and 'line_minlen' in config:
-            return config['line_minlen']
+        if self.config and 'line_minlen' in self.config:
+            return self.config['line_minlen']
         else: 
             return 10
         
     def get_failback(self):
         """ failback profile, applies if profile not found. """
-        config = Config().plugin_get_config(self.__class__.__name__)
 
-        if config and 'failback_profile' in config:
-            return config['failback_profile']
+        if self.config and 'failback_profile' in self.config:
+            return self.config['failback_profile']
         else: 
             return 'default'
+
+    def load_profile_mappings(self):
+        """ get profile mapping as declared with profile_patterns config key
+        and append profile names as patterns
+        profiles are saved as compiled patterns in an ordered dictionary
+        so patterns mappings are parsed prior to profiles
+        """
+        
+        if self.config and 'profile_patterns' in self.config:
+            # we have to parse and create dict since configuration doesnt allow this
+            for pre in self.config['profile_patterns']:
+                kv=pre.split(":")
+                if len(kv)==2:
+                    # config recovered as ugly string with leading and trailing quotes removed, must remove ' and "
+                    dbg("profile mapping : %s -> %s"%(kv[0].replace("'","").replace('"',''),kv[1].replace("'","").replace('"','')))
+                    self.profile_mappings[re.compile(kv[0].replace("'","").replace('"',''))]=kv[1].replace("'","").replace('"','')
+            # we load profile name as plain regex
+            for v in Terminator().config.list_profiles():
+                    self.profile_mappings[re.compile(v)]=v
