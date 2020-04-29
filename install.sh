@@ -1,10 +1,7 @@
 #!/bin/bash
-
-DEFAULT=/ #we get the relative path, usr/share/terminator/terminatorlib/plugins/host_watch.py from the git repo dir structure.
 FALLBACK=~/.config/terminator/plugins/host_watch.py
-FILES=$(ls files)
 PLUGIN_FILE=$(find . -name \*host_watch.py -print)
-
+DEFAULT=/${PLUGIN_FILE#./*/}
 
 echo installing TerminatorHostwatch...
 
@@ -13,9 +10,10 @@ then
   echo installing to default location: $DEFAULT
   {
           echo attempting install...  
-	  install -D files/* $DEFAULT
+	  install -D $PLUGIN_FILE $DEFAULT
   } || {
 	  echo falling back to userland install since no sudo.
+          echo installing to $FALLBACK
           install -D $PLUGIN_FILE $FALLBACK
   }
 else
