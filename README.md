@@ -43,7 +43,7 @@ The plugin checks for exact match between hostname and profile, or profile patte
 
 ![Profiles](assets/terminator-hostwatch.png)
 
- ## Installation
+## Installation
 Put the `host_watch.py` in `/usr/share/terminator/terminatorlib/plugins/` or `~/.config/terminator/plugins/`. This can be done using `install.sh`, which if run using sudo will default to installation at `/usr/share/terminator/terminatorlib/plugins/` or if run as user, will install to `~/.config/terminator/plugins/`.
 
 Minimal configuration : create a profile in Terminator to match your hostname. If you have a server that displays `user@myserver ~ $`, for instance, create a profile called `myserver`.
