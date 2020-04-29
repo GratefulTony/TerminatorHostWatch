@@ -164,8 +164,8 @@ try:
 except ImportError as Ex:
     err(Ex)
 
-
 class HostWatch(plugin.Plugin):
+    dbg("loading HostWatch")
     watches = {}
     config = {}
     profile_mappings = OrderedDict()
@@ -341,7 +341,7 @@ class HostWatch(plugin.Plugin):
                     self.profile_mappings[re.compile(kv[0].replace("'", "").replace('"', ''))] = kv[1].replace("'",
                                                                                                                "").replace(
                         '"', '')
-            # we load profile name as plain regex
-            for v in Terminator().config.list_profiles():
-                dbg("Adding profile for " + v)
-                self.profile_mappings[re.compile(v)] = v
+        # we load profile name as plain regex
+        for v in Terminator().config.list_profiles():
+            dbg("Adding profile for " + v)
+            self.profile_mappings[re.compile(v)] = v
