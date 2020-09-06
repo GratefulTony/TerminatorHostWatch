@@ -154,15 +154,11 @@ from terminatorlib.terminator import Terminator
 from terminatorlib.config import Config
 from collections import OrderedDict
 
-try:
-    import pynotify
+# Every plugin you want Terminator to load *must* be listed in 'AVAILABLE'
+# This is inside this try so we only make the plugin available if pynotify
+#  is present on this computer.
+AVAILABLE = ['HostWatch']
 
-    # Every plugin you want Terminator to load *must* be listed in 'AVAILABLE'
-    # This is inside this try so we only make the plugin available if pynotify
-    #  is present on this computer.
-    AVAILABLE = ['HostWatch']
-except ImportError as Ex:
-    err(Ex)
 
 class HostWatch(plugin.Plugin):
     dbg("loading HostWatch")
@@ -218,7 +214,7 @@ class HostWatch(plugin.Plugin):
                             break
 
                     # avoid re-applying profile if no change
-                    if sel_profile != self.last_profile:
+                    if sel_profile != self.last_profile or True: # disabled this check, profile wasnt updating for multiple splits. todo: revisit.
                         dbg("setting profile " + sel_profile)
                         terminal.set_profile(None, sel_profile, False)
                         self.last_profile = sel_profile
