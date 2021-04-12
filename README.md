@@ -53,7 +53,12 @@ Plugins section in `.config/terminator/config` :
 ```
 [plugins]
   [[HostWatch]]
-    ...
+    # Matches PS1. The first regex group is treated as the hostname and used to match the 
+    # profile name or the profile_patterns.
+    patterns = [^@]+@([-\d\w]+)
+    
+    # Matches a hostname regex to a Terminator profile, format: <pattern>:<profile>,...
+    profile_patterns = ([\w\d]+-mysql-prd-\d+|swift-prod-\d+):prod
 ```
 
 ### Configuration keys
