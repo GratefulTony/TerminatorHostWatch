@@ -178,11 +178,11 @@ class HostWatch(plugin.Plugin):
         self.prompt_minlen = int(self.get_prompt_minlen())
         self.line_minlen = int(self.get_line_minlen())
         self.failback_profile = self.get_failback()
-        self.last_profile = self.failback_profile
+        self.last_profile = {}
         self.load_patterns()
         self.load_profile_mappings()
         self.update_watches()
-
+        
     def update_watches(self):
         for terminal in Terminator().terminals:
             if terminal not in self.watches:
@@ -199,26 +199,24 @@ class HostWatch(plugin.Plugin):
                 match = prompt_pattern.match(last_line)
                 if match:
                     hostname = match.group(1)
-                    dbg("match search pattern : %s (%s) ->%s" % (prompt_pattern.pattern, last_line, hostname))
-                    dbg(self.profile_mappings)
-                # since dict is ordered, iterate regexp/mapping, then profiles
+                    dbg("prompt match: %s (%s) -> hostname = %s" % (prompt_pattern.pattern, last_line, hostname))
                     for profile_pattern, profile in self.profile_mappings.items():
-
-                        # we create a pattern based on profile name
-                        # profile_pattern=re.compile(profile)
-                        if hostname == profile or profile_pattern.match(hostname):
-                            dbg(
-                                "matching profile '" + profile + "' found : line '" + last_line + "' matches prompt pattern '" + prompt_pattern.pattern + "' and profile pattern '" + profile_pattern.pattern + "'")
+                        if hostname == profile:
+                            dbg("profile match: profile %s matches hostname by name" % profile)
                             sel_profile = profile
-                            # break on first profile match
                             break
+                        elif profile_pattern.match(hostname):
+                            dbg("profile match: profile %s matches pattern %s on hostname %s" % (profile, profile_pattern.pattern, hostname))
+                            sel_profile = profile
+                            break
+                        else:
+                            dbg("profile did not match: profile %s, pattern %s, hostname %s" % (profile, profile_pattern.pattern, hostname))
 
                     # avoid re-applying profile if no change
-                    if sel_profile != self.last_profile or True: # disabled this check, profile wasnt updating for multiple splits. todo: revisit.
-                        dbg("setting profile " + sel_profile)
+                    if terminal not in self.last_profile or sel_profile != self.last_profile[terminal]: # disabled this check, profile wasnt updating for multiple splits. todo: revisit.
+                        dbg("setting profile %s for terminal %s" % (sel_profile, terminal))
                         terminal.set_profile(None, sel_profile, False)
-                        self.last_profile = sel_profile
-                    # break on first pattern match
+                        self.last_profile[terminal] = sel_profile
                     break
 
         return True
@@ -328,15 +326,15 @@ class HostWatch(plugin.Plugin):
 
         if self.config and 'profile_patterns' in self.config:
             # we have to parse and create dict since configuration doesnt allow this
-            for pre in self.config['profile_patterns']:
+            for pre in self.config['profile_patterns'].split(','):
+                dbg("profile pattern parsing: %s" % pre)
                 kv = pre.split(":")
                 if len(kv) == 2:
                     # config recovered as ugly string with leading and trailing quotes removed, must remove ' and "
-                    dbg("profile mapping : %s -> %s" % (
-                    kv[0].replace("'", "").replace('"', ''), kv[1].replace("'", "").replace('"', '')))
-                    self.profile_mappings[re.compile(kv[0].replace("'", "").replace('"', ''))] = kv[1].replace("'",
-                                                                                                               "").replace(
-                        '"', '')
+                    pattern_regex = kv[0].replace("'", "").replace('"', '')
+                    target_profile = kv[1].replace("'", "").replace('"', '')
+                    dbg("profile mapping : %s -> %s" % (pattern_regex, target_profile))
+                    self.profile_mappings[re.compile(pattern_regex)] = target_profile
         # we load profile name as plain regex
         for v in Terminator().config.list_profiles():
             dbg("Adding profile for " + v)
