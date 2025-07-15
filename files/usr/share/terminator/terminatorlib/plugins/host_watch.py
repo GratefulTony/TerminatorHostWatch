@@ -153,6 +153,7 @@ from terminatorlib.util import err, dbg
 from terminatorlib.terminator import Terminator
 from terminatorlib.config import Config
 from collections import OrderedDict
+from gi.repository import Vte
 
 # Every plugin you want Terminator to load *must* be listed in 'AVAILABLE'
 # This is inside this try so we only make the plugin available if pynotify
@@ -182,7 +183,7 @@ class HostWatch(plugin.Plugin):
         self.load_patterns()
         self.load_profile_mappings()
         self.update_watches()
-        
+
     def update_watches(self):
         for terminal in Terminator().terminals:
             if terminal not in self.watches:
@@ -246,10 +247,13 @@ class HostWatch(plugin.Plugin):
         if current line too short, we assume prompt is wrapped
         we the search for 1st line of prompt, that is : first line following the
         last line containing LF
-        we iterate back until LF found (means : end of output of last command), 
+        we iterate back until LF found (means : end of output of last command),
         then forward one line
         """
-        lines = vte.get_text_range(start_row, start_col, end_row, end_col, is_interesting_char)[0]
+        # https://api.pygobject.gnome.org/Vte-3.91/class-Terminal.html#gi.repository.Vte.Terminal.get_text_range
+        # https://api.pygobject.gnome.org/Vte-3.91/class-Terminal.html#gi.repository.Vte.Terminal.get_text_range_format
+        # https://api.pygobject.gnome.org/Vte-3.91/enum-Format.html#gi.repository.Vte.Format
+        lines = vte.get_text_range_format(Vte.Format.TEXT, start_row, start_col, end_row, end_col)[0]
 
         if lines and lines[0]:
             # line too short, iterate back
@@ -258,7 +262,7 @@ class HostWatch(plugin.Plugin):
                     self.prompt_minlen) + " chars : must iterate back")
                 start_row = start_row - 1
                 end_row = start_row
-                lines = vte.get_text_range(start_row, start_col, end_row, end_col, is_interesting_char)[0]
+                lines = vte.get_text_range_format(Vte.Format.TEXT, start_row, start_col, end_row, end_col)[0]
                 prev_lines = lines
                 # we iterate back to first line of terminal, including history...
                 while lines != None and start_row >= 0:
@@ -267,7 +271,7 @@ class HostWatch(plugin.Plugin):
                         lines = prev_lines
                         break
 
-                    lines = vte.get_text_range(start_row, start_col, end_row, end_col, is_interesting_char)[0]
+                    lines = vte.get_text_range_format(Vte.Format.TEXT, start_row, start_col, end_row, end_col)[0]
                     start_row = start_row - 1
                     end_row = start_row
                     prev_lines = lines
